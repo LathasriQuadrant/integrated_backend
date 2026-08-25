@@ -1,5 +1,5 @@
 """
-AI Analysis endpoints (Phase 2).
+AI Analysis endpoints (Phase 2). 
 
 Each endpoint accepts EITHER:
   * an AnalysisRequest with pre-computed `metadata` (e.g. the output of a
