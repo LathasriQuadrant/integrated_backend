@@ -449,4 +449,4 @@ class TableauMetadataApiClient:
     async def get_custom_sql(self, workbook_luid: str) -> dict[str, Any]:
         result = await self._execute(CUSTOM_SQL_GRAPHQL_QUERY, {"workbookLuid": workbook_luid})
         workbooks = result["data"].get("workbooks", [])
-        return workbooks[0] if workbooks else {}
+        return workbooks[0] if workbooks else {} 
