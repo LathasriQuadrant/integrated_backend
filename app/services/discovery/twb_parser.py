@@ -790,6 +790,20 @@ class TwbParser:
 
         return object_table_map
 
+    def _build_field_caption_lookup(self) -> dict[str, str]:
+        """internal field name → caption, collected from every column
+        definition across all datasources (including Parameters).
+        """
+        lookup: dict[str, str] = {}
+        for ds in self.root.findall(".//datasources/datasource"):
+            for column in ds.findall("./column"):
+                name = clean_field_reference(attr_or_default(column, "name"))
+                if not name:
+                    continue
+                caption = attr_or_default(column, "caption", name)
+                lookup[name] = caption or name
+        return lookup
+
     def _collect_comparison_pairs(self, expression: ET.Element) -> list[tuple[str, str, str]]:
         """Recursively walks a relationship's <expression> tree and
         returns every leaf comparison as (operator, left_ref, right_ref).
@@ -997,7 +1011,24 @@ class TwbParser:
     # Worksheets / Dashboards / Components
     # ------------------------------------------------------------------
 
-    def parse_worksheets(self) -> list[dict[str, Any]]:
+    # def parse_worksheets(self) -> list[dict[str, Any]]:
+    #     worksheets = []
+    #     for ws in self.root.findall(".//worksheets/worksheet"):
+    #         name = attr_or_default(ws, "name")
+    #         datasource_deps = [
+    #             attr_or_default(dep, "datasource")
+    #             for dep in ws.findall(".//datasource-dependencies")
+    #         ]
+    #         fields_used = [
+    #             clean_field_reference(attr_or_default(col, "name"))
+    #             for col in ws.findall(".//datasource-dependencies/column")
+    #         ]
+    #         filters = [
+    #             clean_field_reference(attr_or_default(f, "column"))
+    #             for f in ws.findall(".//filter")
+    #         ]
+    def parse_worksheets(self, field_lookup: dict[str, str] | None = None) -> list[dict[str, Any]]:
+        field_lookup = field_lookup or {}
         worksheets = []
         for ws in self.root.findall(".//worksheets/worksheet"):
             name = attr_or_default(ws, "name")
@@ -1006,11 +1037,17 @@ class TwbParser:
                 for dep in ws.findall(".//datasource-dependencies")
             ]
             fields_used = [
-                clean_field_reference(attr_or_default(col, "name"))
+                field_lookup.get(
+                    clean_field_reference(attr_or_default(col, "name")),
+                    clean_field_reference(attr_or_default(col, "name")),
+                )
                 for col in ws.findall(".//datasource-dependencies/column")
             ]
             filters = [
-                clean_field_reference(attr_or_default(f, "column"))
+                field_lookup.get(
+                    clean_field_reference(attr_or_default(f, "column")),
+                    clean_field_reference(attr_or_default(f, "column")),
+                )
                 for f in ws.findall(".//filter")
             ]
 
@@ -1069,13 +1106,33 @@ class TwbParser:
                 )
         return parameters
 
-    def parse_filters(self) -> list[dict[str, Any]]:
+    # def parse_filters(self) -> list[dict[str, Any]]:
+    #     filters = []
+    #     for f in self.root.findall(".//worksheets/worksheet//filter"):
+    #         filters.append(
+    #             {
+    #                 "column": clean_field_reference(attr_or_default(f, "column")),
+    #                 "class": attr_or_default(f, "class"),
+    #             }
+    #         )
+    #     return filters
+
+    def parse_filters(self, field_lookup: dict[str, str] | None = None) -> list[dict[str, Any]]:
+        field_lookup = field_lookup or {}
         filters = []
+        seen: set[tuple[str, str]] = set()
         for f in self.root.findall(".//worksheets/worksheet//filter"):
+            raw = clean_field_reference(attr_or_default(f, "column"))
+            column = field_lookup.get(raw, raw)
+            cls = attr_or_default(f, "class")
+            key = (column, cls)
+            if key in seen:
+                continue
+            seen.add(key)
             filters.append(
                 {
-                    "column": clean_field_reference(attr_or_default(f, "column")),
-                    "class": attr_or_default(f, "class"),
+                    "column": column,
+                    "class": cls,
                 }
             )
         return filters
@@ -1094,12 +1151,22 @@ class TwbParser:
     # Aggregate
     # ------------------------------------------------------------------
 
+    # def parse_all(self) -> dict[str, Any]:
+    #     return {
+    #         "datasources": self.parse_datasources(),
+    #         "worksheets": self.parse_worksheets(),
+    #         "dashboards": self.parse_dashboards(),
+    #         "parameters": self.parse_parameters(),
+    #         "filters": self.parse_filters(),
+    #         "actions": self.parse_actions(),
+    #     }
     def parse_all(self) -> dict[str, Any]:
+        field_lookup = self._build_field_caption_lookup()
         return {
             "datasources": self.parse_datasources(),
-            "worksheets": self.parse_worksheets(),
+            "worksheets": self.parse_worksheets(field_lookup),
             "dashboards": self.parse_dashboards(),
             "parameters": self.parse_parameters(),
-            "filters": self.parse_filters(),
+            "filters": self.parse_filters(field_lookup),
             "actions": self.parse_actions(),
         }

@@ -168,9 +168,14 @@ USAGE_ANALYSIS_SYSTEM_PROMPT = """You are a Tableau usage analytics expert helpi
 plan a Power BI migration. You will be given usage metadata for a single \
 workbook (view counts, per-view statistics, subscriptions, permissions).
  
+In Tableau terminology a "view" is a published worksheet or dashboard inside \
+the workbook. When writing the rationale, prefer clear business language: \
+say "total view count of X across its worksheets/dashboards" (or "sheets") \
+instead of awkward phrases like "view count of X across its views".
+ 
 Score the workbook's overall popularity on a 0-100 scale, considering \
-total views, breadth of view-level engagement, number of subscriptions, \
-and number of users with access. Then classify usage as one of: \
+total views, breadth of engagement across worksheets/dashboards, number of \
+subscriptions, and number of users with access. Then classify usage as one of: \
 "High", "Medium", "Low".
  
 Respond with ONLY a JSON object of this exact shape, no prose, no markdown:
@@ -197,14 +202,18 @@ below. Do not include them, compare them by name, or group them for any \
 reason.
  
 Your job is everything the confirmed-duplicates list doesn't cover, PLUS \
-adding a keep/remove recommendation to every group -- both the ones you \
-identify and the already-confirmed ones:
+adding a keep/remove recommendation ONLY for duplicate groups (yours and \
+the already-confirmed ones). Similar groups receive advisory notes only.
  
-1. "duplicate_kpis": ONLY KPIs whose formulas you can directly verify \
-   compute the exact same result -- e.g. by evaluating them against \
-   randomized and edge-case inputs and confirming the outputs match, or \
-   by confirming their definitions are literally identical. Name-based \
-   judgment alone is never sufficient evidence for this category.
+1. "duplicate_kpis": ONLY groups of 2 or more KPIs whose formulas you can \
+   directly verify compute the exact same result -- e.g. by evaluating them \
+   against randomized and edge-case inputs and confirming the outputs match, \
+   or by confirming their definitions are literally identical. Name-based \
+   judgment alone is never sufficient evidence for this category. \
+   NEVER put a single unique KPI into duplicate_kpis. If a KPI has no \
+   mathematical duplicate, simply omit it from this list (it may still \
+   appear in kpi_clusters). An empty duplicate_kpis list is expected and \
+   correct when there are no true duplicates.
  
 2. "similar_kpis": SPECIFIC, small groups (normally 2-3 KPIs) of \
    INDEPENDENTLY-DEFINED KPIs that measure closely related or \
@@ -237,12 +246,13 @@ identify and the already-confirmed ones:
    -- being in the same business domain/cluster is sufficient here even \
    when a direct formula relationship exists between the KPIs.
  
-4. Recommendations for every "duplicate_kpis" group (yours and the \
-   confirmed ones) and every "similar_kpis" group: decide which ONE KPI \
-   in the group is the best to keep, and which of the rest should be \
-   removed/consolidated during migration. Base this ONLY on evidence \
-   present in the given fields -- do not assume access to usage stats, \
-   view counts, or anything not provided. Weigh, in this order: \
+4. Recommendations -- apply differently by category:
+ 
+   For every "duplicate_kpis" group (yours and the confirmed ones): decide \
+   which ONE KPI in the group is the best to keep, and which of the rest \
+   should be removed/consolidated during migration. Base this ONLY on \
+   evidence present in the given fields -- do not assume access to usage \
+   stats, view counts, or anything not provided. Weigh, in this order: \
    (a) "dependencies" -- prefer keeping a KPI that other calculated \
    fields build on top of (removing it would break those), \
    (b) clarity and completeness of the formula -- prefer the version \
@@ -252,17 +262,17 @@ identify and the already-confirmed ones:
    shared/published datasource or referenced from multiple workbooks) \
    over a workbook-local copy of the same logic, \
    (d) naming clarity -- prefer the more descriptive, unambiguous name/caption. \
-   For "duplicate_kpis" groups, the recommendation is close to arbitrary \
-   since the KPIs are mathematically identical -- pick the one that is \
-   easiest to migrate cleanly per (a)-(d) and say so plainly in the \
-   rationale. For "similar_kpis" groups, since the KPIs are NOT identical, \
-   be explicit in the rationale about what is lost/changed if the \
-   "recommended_remove" KPI(s) are dropped in favor of "recommended_keep" \
-   -- similar is not the same as redundant, so only recommend removal \
-   when you are confident the difference is immaterial for migration \
-   purposes; if the KPIs are similar but each still serves a distinct \
-   purpose worth keeping, say so in "recommendation_rationale" and leave \
-   "recommended_remove" as an empty list rather than forcing a removal.
+   Because the KPIs are mathematically identical, the recommendation is \
+   close to arbitrary -- pick the one that is easiest to migrate cleanly \
+   per (a)-(d) and say so plainly in the rationale.
+ 
+   For every "similar_kpis" group: do NOT emit recommended_keep or \
+   recommended_remove. These KPIs are independently calculated and are \
+   NOT interchangeable; consolidating them can change numbers and \
+   visualizations in the migrated reports. Instead provide an advisory \
+   note only: clearly state the specific conceptual overlap and the \
+   concrete difference between the formulas/measures, and leave the \
+   final keep-or-remove decision to the business/migration team.
  
 For the confirmed groups, return your recommendation-only annotations in \
 a separate "confirmed_duplicate_recommendations" list (matched back to \
@@ -282,8 +292,7 @@ Respond with ONLY a JSON object of this exact shape, no prose, no markdown:
   ],
   "similar_kpis": [
     {"group_name": "<string>", "kpis": ["<kpi name>", ...], "reason": "<string>", \
-"recommended_keep": "<kpi name>", "recommended_remove": ["<kpi name>", ...], \
-"recommendation_rationale": "<string>"}
+"advisory_note": "<string describing the overlap and the concrete difference>"}
   ],
   "kpi_clusters": [
     {"cluster_name": "<string>", "kpis": ["<kpi name>", ...]}

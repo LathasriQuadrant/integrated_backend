@@ -226,12 +226,16 @@ async def discover_data_model(
                 seen_schemas.add(schema_key)
                 schemas.append({"database": conn.get("database", ""), "schema": conn.get("schema", "")})
 
+        # Prefer the human-readable caption for user-facing fields; fall
+        # back to the internal name only when no caption was captured.
+        ds_label = ds.get("caption") or ds["name"]
+
         for table in ds.get("tables", []):
             table_ref = table.get("table", table.get("name", ""))
             table_key = f"{ds['name']}.{table_ref}"
             if table_key not in seen_tables:
                 seen_tables.add(table_key)
-                tables.append({"datasource": ds["name"], **table})
+                tables.append({"datasource": ds_label, **table})
 
             # Fall back to parsing "[schema].[table]" when the connection
             # itself didn't expose a schema (e.g. Azure SQL DB).
@@ -246,10 +250,10 @@ async def discover_data_model(
                     schemas.append({"database": db_name, "schema": inferred_schema})
 
         for join in ds.get("joins", []):
-            joins.append({"datasource": ds["name"], **join})
+            joins.append({"datasource": ds_label, **join})
             relationships.append(
                 {
-                    "datasource": ds["name"],
+                    "datasource": ds_label,
                     "left_table": join.get("left_table", ""),
                     "left_column": join.get("left_column", ""),
                     "right_table": join.get("right_table", ""),
@@ -260,7 +264,7 @@ async def discover_data_model(
             )
 
         for sql in ds.get("custom_sql", []):
-            custom_sql.append({"datasource": ds["name"], **sql})
+            custom_sql.append({"datasource": ds_label, **sql})
 
     # Published (server-hosted) datasources connected to this workbook, via REST.
     for conn in connections:
@@ -299,9 +303,15 @@ async def discover_data_model(
 
         if not matched and gt_name not in seen_tables:
             seen_tables.add(gt_name)
+            # Prefer a real datasource label when we can infer one:
+            # 1) single known datasource → use its caption/name
+            # 2) otherwise leave blank rather than inventing a value
+            inferred_ds = ""
+            if len(datasources) == 1:
+                inferred_ds = datasources[0].get("caption") or datasources[0].get("name", "")
             tables.append(
                 {
-                    "datasource": "",
+                    "datasource": inferred_ds,
                     "name": gt_name,
                     "schema": gt.get("schema", ""),
                     "database": (gt.get("database") or {}).get("name", ""),

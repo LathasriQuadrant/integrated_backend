@@ -228,10 +228,13 @@ async def analyze_kpis(
     # formula. Keep any LLM-proposed duplicate group only if it doesn't
     # touch a KPI we've already grouped -- covers KPIs with no formula,
     # which the LLM judges on name/metadata semantics instead.
+    # Also enforce the hard rule that a duplicate group must contain
+    # at least 2 KPIs (single unique KPIs must never appear here).
     llm_duplicates = [
         g
         for g in response.get("duplicate_kpis", [])
-        if not (set(g.get("kpis", [])) & already_grouped)
+        if len(g.get("kpis", [])) >= 2
+        and not (set(g.get("kpis", [])) & already_grouped)
     ]
  
     # The LLM never re-derives membership for deterministic groups (see
@@ -260,8 +263,14 @@ async def analyze_kpis(
             group.setdefault("recommended_remove", [])
             group.setdefault("recommendation_rationale", "")
  
+    # Similar groups must also contain at least 2 KPIs.
+    similar_kpis = [
+        g for g in response.get("similar_kpis", [])
+        if len(g.get("kpis", [])) >= 2
+    ]
+
     return {
         "duplicate_kpis": deterministic_duplicates + llm_duplicates,
-        "similar_kpis": response.get("similar_kpis", []),
+        "similar_kpis": similar_kpis,
         "kpi_clusters": response.get("kpi_clusters", []),
     }
