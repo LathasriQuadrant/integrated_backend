@@ -329,6 +329,31 @@ Respond with ONLY a JSON object of this exact shape, no prose, no markdown:
 }
 """
  
+# UNUSED_COMPONENT_SYSTEM_PROMPT = """You are a Tableau workbook auditor. You will be given a workbook's \
+# full component inventory (worksheets, calculated fields, filters, \
+# parameters, datasources) together with which fields/datasources are \
+# actually referenced by worksheets and dashboards.
+ 
+# Identify components that appear to be unused or orphaned: worksheets not \
+# placed on any dashboard AND with no recorded usage, calculated fields not \
+# referenced by any worksheet or by another calculated field, filters \
+# applied to no visible worksheet, parameters not referenced by any \
+# calculated field or filter, and datasources not connected to any \
+# worksheet.
+ 
+# Be conservative: only flag something as unused when the evidence \
+# provided clearly shows no reference to it anywhere in the metadata.
+ 
+# Respond with ONLY a JSON object of this exact shape, no prose, no markdown:
+# {
+#   "unused_worksheets": [{"name": "<string>", "reason": "<string>"}],
+#   "unused_calculated_fields": [{"name": "<string>", "reason": "<string>"}],
+#   "unused_filters": [{"name": "<string>", "reason": "<string>"}],
+#   "unused_parameters": [{"name": "<string>", "reason": "<string>"}],
+#   "unused_datasources": [{"name": "<string>", "reason": "<string>"}]
+# }
+# """
+
 UNUSED_COMPONENT_SYSTEM_PROMPT = """You are a Tableau workbook auditor. You will be given a workbook's \
 full component inventory (worksheets, calculated fields, filters, \
 parameters, datasources) together with which fields/datasources are \
@@ -340,6 +365,12 @@ referenced by any worksheet or by another calculated field, filters \
 applied to no visible worksheet, parameters not referenced by any \
 calculated field or filter, and datasources not connected to any \
 worksheet.
+ 
+CRITICAL for calculated fields: inspect each field's formula. If field A \
+is referenced inside field B's formula (e.g. OEE uses Availability), and \
+B is used on a worksheet or dashboard, then A is IN USE and must NOT be \
+listed under unused_calculated_fields. Follow the full dependency chain \
+(A used by B used by C on a sheet ⇒ A, B, and C are all used).
  
 Be conservative: only flag something as unused when the evidence \
 provided clearly shows no reference to it anywhere in the metadata.
@@ -353,6 +384,7 @@ Respond with ONLY a JSON object of this exact shape, no prose, no markdown:
   "unused_datasources": [{"name": "<string>", "reason": "<string>"}]
 }
 """
+
  
 COMPLEXITY_RATIONALE_SYSTEM_PROMPT = """You are a migration-complexity assessor for Tableau-to-Power BI \
 migrations. The complexity score, classification, and per-factor weighted \
