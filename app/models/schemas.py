@@ -40,12 +40,19 @@ class DiscoveryRequest(BaseModel):
 
     username: Optional[str] = None
     password: Optional[str] = None
-    api_token: Optional[str] = Field(
+    # api_token: Optional[str] = Field(
+    #     default=None,
+    #     description="Alternative to username/password: an api_token previously "
+    #     "returned by POST /tableau/signin. When set, discovery reuses that "
+    #     "existing Tableau session instead of signing in again.",
+    # ) #change 1
+    auth_token: Optional[str] = Field(
         default=None,
-        description="Alternative to username/password: an api_token previously "
-        "returned by POST /tableau/signin. When set, discovery reuses that "
-        "existing Tableau session instead of signing in again.",
+        description="Alternative to username/password: an auth_token+site_id pair "
+        "previously returned by POST /tableau/signin. When set, discovery reuses "
+        "that existing Tableau session instead of signing in again.",
     )
+    site_id: Optional[str] = None
     site_content_url: str = ""
     workbook_ids: Optional[list[str]] = Field(
         default=None,
@@ -57,13 +64,23 @@ class DiscoveryRequest(BaseModel):
         description="Whether to download and parse .twb/.twbx files for deep metadata.",
     )
 
+    # @model_validator(mode="after")
+    # def _require_credentials_or_token(self) -> "DiscoveryRequest":
+    #     has_credentials = bool(self.username) and bool(self.password)
+    #     has_token = bool(self.api_token)
+    #     if not has_credentials and not has_token:
+    #         raise ValueError(
+    #             "Provide either username+password or api_token (from POST /tableau/signin)."
+    #         )
+    #     return self #change2
+
     @model_validator(mode="after")
     def _require_credentials_or_token(self) -> "DiscoveryRequest":
         has_credentials = bool(self.username) and bool(self.password)
-        has_token = bool(self.api_token)
+        has_token = bool(self.auth_token) and bool(self.site_id)
         if not has_credentials and not has_token:
             raise ValueError(
-                "Provide either username+password or api_token (from POST /tableau/signin)."
+                "Provide either username+password or auth_token+site_id (from POST /tableau/signin)."
             )
         return self
 
