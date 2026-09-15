@@ -47,22 +47,30 @@ class SigninBody(BaseModel):
 
 
 class TokenBody(BaseModel):
-    api_token: str
+    # api_token: str #change1
+    auth_token: str
+    site_id: str
 
 
 class WorkbookBody(BaseModel):
-    api_token: str
+    # api_token: str #change2
+    auth_token: str
+    site_id: str
     workbook_id: str
 
 
 class DownloadWorkbookBody(BaseModel):
-    api_token: str
+    # api_token: str # change 3
+    auth_token: str
+    site_id: str
     workbook_id: str
     file_name: Optional[str] = None
 
 
 class DownloadWorkbookDatasourcesBody(BaseModel):
-    api_token: str
+    # api_token: str #change4
+    auth_token: str
+    site_id: str
     workbook_id: str
 
 
@@ -76,11 +84,16 @@ def _safe_request(method: str, url: str, headers: dict | None = None, json_body:
     return r
 
 
-def _get_auth(api_token: str) -> dict[str, str]:
-    try:
-        return get_legacy_auth(api_token)
-    except KeyError as exc:
-        raise RuntimeError(str(exc)) from exc
+# def _get_auth(api_token: str) -> dict[str, str]:
+#     try:
+#         return get_legacy_auth(api_token)
+#     except KeyError as exc:
+#         raise RuntimeError(str(exc)) from exc #change 5
+
+def _get_auth(auth_token: str, site_id: str) -> dict[str, str]:
+    if not auth_token or not site_id:
+        raise RuntimeError("Invalid or missing auth_token/site_id")
+    return {"auth_token": auth_token, "site_id": site_id}
 
 
 def _upload_to_azure(file_path: str, blob_name: str) -> str:
@@ -119,15 +132,17 @@ def signin(body: SigninBody):
             json_body=payload,
         )
 
+        # creds = r.json()["credentials"]
+        # api_token = str(uuid.uuid4())
+
+        # TOKEN_STORE[api_token] = {
+        #     "auth_token": creds["token"],
+        #     "site_id": creds["site"]["id"],
+        # }
+
+        # return {"api_token": api_token} #chnage 6
         creds = r.json()["credentials"]
-        api_token = str(uuid.uuid4())
-
-        TOKEN_STORE[api_token] = {
-            "auth_token": creds["token"],
-            "site_id": creds["site"]["id"],
-        }
-
-        return {"api_token": api_token}
+        return {"auth_token": creds["token"], "site_id": creds["site"]["id"]}
 
     except Exception as e:  # noqa: BLE001 -- match legacy behavior: any failure -> 401 JSON error
         return JSONResponse(status_code=401, content={"error": "Signin failed", "details": str(e)})
@@ -139,7 +154,8 @@ def signin(body: SigninBody):
 def fetch_data(body: TokenBody):
     settings = get_settings()
     try:
-        auth = _get_auth(body.api_token)
+        # auth = _get_auth(body.api_token) #change 7
+        auth = _get_auth(body.auth_token, body.site_id)
         headers = {"X-Tableau-Auth": auth["auth_token"], "Accept": "application/json"}
         base = f"{settings.TABLEAU_SERVER}/api/{settings.API_VERSION}/sites/{auth['site_id']}"
 
@@ -177,7 +193,8 @@ def fetch_data(body: TokenBody):
 def workbook_datasources(body: WorkbookBody):
     settings = get_settings()
     try:
-        auth = _get_auth(body.api_token)
+        # auth = _get_auth(body.api_token) #change8
+        auth = _get_auth(body.auth_token, body.site_id)
         headers = {"X-Tableau-Auth": auth["auth_token"], "Accept": "application/json"}
 
         url = (
@@ -207,7 +224,8 @@ def workbook_datasources(body: WorkbookBody):
 def get_connections(body: WorkbookBody):
     settings = get_settings()
     try:
-        auth = _get_auth(body.api_token)
+        # auth = _get_auth(body.api_token) #change 9
+        auth = _get_auth(body.auth_token, body.site_id)
         headers = {"X-Tableau-Auth": auth["auth_token"], "Accept": "application/json"}
 
         url = (
@@ -228,7 +246,8 @@ def get_connections(body: WorkbookBody):
 def download_workbook(body: DownloadWorkbookBody):
     settings = get_settings()
     try:
-        auth = _get_auth(body.api_token)
+        # auth = _get_auth(body.api_token) #change 10
+        auth = _get_auth(body.auth_token, body.site_id)
 
         os.makedirs(settings.DOWNLOAD_DIR, exist_ok=True)
         filename = body.file_name or f"{body.workbook_id}.twbx"
@@ -259,7 +278,8 @@ def download_workbook(body: DownloadWorkbookBody):
 def download_workbook_datasources(body: DownloadWorkbookDatasourcesBody):
     settings = get_settings()
     try:
-        auth = _get_auth(body.api_token)
+        # auth = _get_auth(body.api_token) #change 11
+        auth = _get_auth(body.auth_token, body.site_id)
         headers = {"X-Tableau-Auth": auth["auth_token"], "Accept": "application/json"}
         base = f"{settings.TABLEAU_SERVER}/api/{settings.API_VERSION}/sites/{auth['site_id']}"
 
