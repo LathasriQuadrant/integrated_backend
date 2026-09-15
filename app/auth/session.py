@@ -22,7 +22,6 @@ from dataclasses import dataclass, field
 from fastapi import HTTPException
 from requests.exceptions import HTTPError, RequestException
 
-from app.auth.legacy_token_store import get_legacy_auth
 from app.auth.tableau_auth import signin_with_credentials, signout
 from app.config import get_settings
 
@@ -75,32 +74,54 @@ def create_session(username: str, password: str, site_content_url: str = "") -> 
     return TableauSession(token=token, site_id=site_id, site_content_url=site_content_url)
 
 
-def create_session_from_legacy_token(api_token: str, site_content_url: str = "") -> TableauSession:
-    """Build a TableauSession that reuses a Tableau auth token already
-    issued via POST /tableau/signin, instead of signing in again.
+# def create_session_from_legacy_token(api_token: str, site_content_url: str = "") -> TableauSession:
+#     """Build a TableauSession that reuses a Tableau auth token already
+#     issued via POST /tableau/signin, instead of signing in again.
 
-    Lets the discovery/analysis/orchestration endpoints accept an
-    `api_token` (from a user who already signed in through the existing
-    frontend flow) as an alternative to username/password, without
-    opening a second, independent Tableau login.
-    """
-    try:
-        legacy_auth = get_legacy_auth(api_token)
-    except KeyError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+#     Lets the discovery/analysis/orchestration endpoints accept an
+#     `api_token` (from a user who already signed in through the existing
+#     frontend flow) as an alternative to username/password, without
+#     opening a second, independent Tableau login.
+#     """
+#     try:
+#         legacy_auth = get_legacy_auth(api_token)
+#     except KeyError as exc:
+#         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
+#     return TableauSession(
+#         token=legacy_auth["auth_token"],
+#         site_id=legacy_auth["site_id"],
+#         site_content_url=site_content_url,
+#         owns_token=False,
+#     ) #change 1
+
+def create_session_from_token(auth_token: str, site_id: str, site_content_url: str = "") -> TableauSession:
+    """Build a TableauSession from an auth_token/site_id pair already
+    obtained via POST /tableau/signin, instead of signing in again."""
+    if not auth_token or not site_id:
+        raise HTTPException(status_code=401, detail="Invalid or missing auth_token/site_id")
     return TableauSession(
-        token=legacy_auth["auth_token"],
-        site_id=legacy_auth["site_id"],
+        token=auth_token,
+        site_id=site_id,
         site_content_url=site_content_url,
         owns_token=False,
     )
 
 
+# def create_session_for_request(request) -> TableauSession:
+#     """Dispatch helper for any request model with `username`/`password`/
+#     `api_token`/`site_content_url` fields (DiscoveryRequest, FullAnalyzeRequest):
+#     reuses a legacy api_token when present, otherwise signs in fresh."""
+#     if getattr(request, "api_token", None):
+#         return create_session_from_legacy_token(request.api_token, request.site_content_url)
+#     return create_session(request.username, request.password, request.site_content_url)
+#change 2
+
 def create_session_for_request(request) -> TableauSession:
     """Dispatch helper for any request model with `username`/`password`/
-    `api_token`/`site_content_url` fields (DiscoveryRequest, FullAnalyzeRequest):
-    reuses a legacy api_token when present, otherwise signs in fresh."""
-    if getattr(request, "api_token", None):
-        return create_session_from_legacy_token(request.api_token, request.site_content_url)
+    `auth_token`/`site_id`/`site_content_url` fields (DiscoveryRequest,
+    FullAnalyzeRequest): reuses an existing Tableau session when
+    auth_token+site_id are present, otherwise signs in fresh."""
+    if getattr(request, "auth_token", None) and getattr(request, "site_id", None):
+        return create_session_from_token(request.auth_token, request.site_id, request.site_content_url)
     return create_session(request.username, request.password, request.site_content_url)
